@@ -11,6 +11,7 @@ using WDBXEditor.Archives.CASC.Handlers;
 using WDBXEditor.Archives.MPQ;
 using WDBXEditor.Common;
 using WDBXEditor.Reader;
+using WDBXEditor.Reader.FileTypes;
 using WDBXEditor.Storage;
 using static WDBXEditor.Common.Constants;
 
@@ -180,6 +181,53 @@ namespace WDBXEditor.ConsoleHandler
 
             Console.WriteLine($"   Successfully extracted files.");
             Console.WriteLine("");
+        }
+        #endregion
+
+        #region New
+        /// <summary>
+        /// Creates a new DBC from a CSV
+        /// <para>-new -f "foo.dbc" -b 11802 -c "foo.csv" -h true</para>
+        /// -f name of dbc file
+        /// -b build number to use when loading dbc
+        /// -c name of csv file
+        /// -h sets whether csv has header row
+        /// </summary>
+        /// <param name="args"></param>
+        public static void NewArgCommand(string[] args)
+        {
+            var pmap = ConsoleManager.ParseCommand(args);
+            var dbcFileName = ParamCheck<string>(pmap, "-f");
+            var csvFileName = ParamCheck<string>(pmap, "-c");
+            var csvHasHeader = ParamCheck<bool>(pmap, "-h", false);
+            int build = ParamCheck<int>(pmap, "-b");
+
+            Database.BuildNumber = build;
+
+            Console.WriteLine($"Creating DBC {dbcFileName} on build {build} with CVS {csvFileName} (header: {csvHasHeader})");
+
+            var def = Database.Definitions.Tables.FirstOrDefault(x => x.Build == build && x.Name.Equals(Path.GetFileNameWithoutExtension(dbcFileName), IGNORECASE));
+            if (def == null)
+                throw new Exception($"   Could not find definition for {Path.GetFileName(dbcFileName)} build {build}.");
+
+            var header = new WDBC(def);
+            header.Signature = "WDBC";
+            var entry = new DBEntry(header, dbcFileName);
+            if (entry.TableStructure == null)
+            {
+                throw new Exception($"   Unknown Build '{build}' and DBC '{Path.GetFileNameWithoutExtension(dbcFileName)}' combination; definition not found.");
+            }
+            Console.WriteLine($"Loading DBC table structure");
+            entry.LoadTableStructure();
+
+            Console.WriteLine("Importing CSV");
+            if (!entry.ImportCSV(csvFileName, csvHasHeader, UpdateMode.Replace, out var importError, ImportFlags.TakeNewest))
+            {
+                throw new Exception($"   Error importing {csvFileName} into {dbcFileName}: {importError}");
+            }
+
+            Console.WriteLine("Writing DBC out");
+            new DBReader().Write(entry, dbcFileName);
         }
         #endregion
 

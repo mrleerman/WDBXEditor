@@ -52,6 +52,7 @@ namespace WDBXEditor.ConsoleHandler
             DefineCommand("-sqldump", ConsoleCommands.SqlDumpArgCommand);
             DefineCommand("-extract", ConsoleCommands.ExtractCommand);
             DefineCommand("-import", ConsoleCommands.ImportArgCommand);
+            DefineCommand("-new", ConsoleCommands.NewArgCommand);
         }
 
         /// <summary>
