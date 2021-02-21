@@ -24,11 +24,8 @@ namespace WDBXEditor.Reader.FileTypes
             : base()
         {
             var LocalizationCount = (definition.Build <= (int)ExpansionFinalBuild.Classic ? 9 : 17); //Pre TBC had 9 locales
-            var numLocalizedFields = definition.Fields.Count(x => x.Type == "loc");
-            //Special case for localized strings, all locales are present (subtract 1 for non-localized column in definition)
-            FieldCount = (uint)(definition.Fields.Count + (numLocalizedFields * (LocalizationCount  -1)));
-
-            RecordSize = (uint)definition.Fields.Sum(x => x.Type != "loc" ? ColumnSizes[x.Type] : (ColumnSizes["string"] * LocalizationCount));
+            FieldCount = (uint)definition.Fields.Select(x => x.Type == "loc" ? LocalizationCount : x.ArraySize).Sum();
+            RecordSize = (uint)definition.Fields.Select(x => x.Type == "loc" ? (ColumnSizes["string"] * LocalizationCount) : (ColumnSizes[x.Type] * x.ArraySize)).Sum();
         }
 
         public override void ReadHeader(ref BinaryReader dbReader, string signature)
