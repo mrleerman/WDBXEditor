@@ -16,8 +16,10 @@ namespace WDBXEditor.Reader.FileTypes
         private static Dictionary<string, int> ColumnSizes = new Dictionary<string, int>
         {
             { "int", 4 },
+            { "uint", 4 },
             { "string", 4 }, // string is actually a uint32 offset in the string table
             { "float", 4 },
+            { "ulong", 4 }
         };
 
         public WDBC(Table definition)
