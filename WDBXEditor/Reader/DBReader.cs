@@ -452,7 +452,7 @@ namespace WDBXEditor.Reader
 								bw.Write((byte)0);
 							}
 							else
-								bw.Write(st.Write(row.Field<string>(j), duplicates));
+								bw.Write(st.Write(row.Field<string>(j), duplicates, !entry.Header.IsTypeOf<WDBC>()));
 							break;
 						default:
 							throw new Exception($"Unknown TypeCode {columnTypes[j].ToString()}");
