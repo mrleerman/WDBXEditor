@@ -553,7 +553,7 @@ namespace WDBXEditor.Storage
 
 				foreach (DataRow row in Data.Rows)
                 {
-					var rowValues = row.ItemArray.Select(field => field.ToString());
+					var rowValues = row.ItemArray.Select(field => (field is float) ? ((double)(float)field).ToString("F6") : field.ToString());
 
 					var x = new ExpandoObject() as IDictionary<string, object>;
 					foreach (var columnAndValue in columnNames.Zip(rowValues, Tuple.Create))
