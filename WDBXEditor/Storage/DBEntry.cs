@@ -23,6 +23,10 @@ using System.IO.MemoryMappedFiles;
 using System.Security.AccessControl;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using CsvHelper;
+using System.Globalization;
+using CsvHelper.Configuration;
+using System.Dynamic;
 
 namespace WDBXEditor.Storage
 {
@@ -539,19 +543,30 @@ namespace WDBXEditor.Storage
 		/// <returns></returns>
 		public string ToCSV()
 		{
-			Func<string, string> EncodeCsv = s => { return string.Concat("\"", s.Replace(Environment.NewLine, string.Empty).Replace("\"", "\"\""), "\""); };
+			var csvConfig = new CsvConfiguration(CultureInfo.InvariantCulture);
+			csvConfig.HasHeaderRecord = true;
 
-			StringBuilder sb = new StringBuilder();
-			IEnumerable<string> columnNames = Data.Columns.Cast<DataColumn>().Select(column => EncodeCsv(column.ColumnName));
-			sb.AppendLine(string.Join(",", columnNames));
+			using (var writer = new StringWriter())
+			using (var csv = new CsvWriter(writer, csvConfig))
+            {
+				var columnNames = Data.Columns.Cast<DataColumn>().Select(column => column.ColumnName);
 
-			foreach (DataRow row in Data.Rows)
-			{
-				IEnumerable<string> fields = row.ItemArray.Select(field => EncodeCsv(field.ToString()));
-				sb.AppendLine(string.Join(",", fields));
-			}
+				foreach (DataRow row in Data.Rows)
+                {
+					var rowValues = row.ItemArray.Select(field => field.ToString());
 
-			return sb.ToString();
+					var x = new ExpandoObject() as IDictionary<string, object>;
+					foreach (var columnAndValue in columnNames.Zip(rowValues, Tuple.Create))
+					{
+						x.Add(columnAndValue.Item1, columnAndValue.Item2);
+					}
+
+					csv.WriteRecord<dynamic>(x);
+					csv.NextRecord();
+				}
+
+				return writer.ToString();
+            }
 		}
 
 		/// <summary>
@@ -647,105 +662,96 @@ namespace WDBXEditor.Storage
 			int idcolumn = Data.Columns[Key].Ordinal;
 			int maxid = int.MinValue;
 
-			string pathOnly = Path.GetDirectoryName(filename);
-			string fileName = Path.GetFileName(filename);
-
-			Func<string, string> Unescape = s =>
-			{
-				if (s.StartsWith("\"") && s.EndsWith("\""))
-				{
-					s = s.Substring(1, s.Length - 2);
-					if (s.Contains("\"\""))
-						s = s.Replace("\"\"", "\"");
-				}
-				return s;
-			};
-
 			try
 			{
 				using (StreamReader sr = new StreamReader(File.OpenRead(filename)))
 				{
-					if (headerrow)
-						sr.ReadLine();
+					var csvConfig = new CsvConfiguration(CultureInfo.InvariantCulture);
+					csvConfig.Delimiter = ",";
+					csvConfig.HasHeaderRecord = headerrow;
+					csvConfig.NewLine = Environment.NewLine;
 
-					while (!sr.EndOfStream)
+					using (var csv = new CsvReader(sr, csvConfig))
 					{
-						string line = sr.ReadLine();
-						string[] rows = Regex.Split(line, ",(?=(?:[^\"]*\"[^\"]*\")*(?![^\"]*\"))", RegexOptions.Compiled);
-						DataRow dr = importTable.NewRow();
-
-						for (int i = 0; i < Data.Columns.Count; i++)
+						var records = csv.GetRecords<dynamic>();
+						foreach (var record in records)
 						{
-							string value = Unescape(rows[i]);
+							DataRow dr = importTable.NewRow();
+							var recordDict = (IDictionary<string, object>)record;
 
-							switch (Data.Columns[i].DataType.Name.ToLower())
-							{
-								case "sbyte":
-									dr[i] = Convert.ToSByte(value);
-									break;
-								case "byte":
-									dr[i] = Convert.ToByte(value);
-									break;
-								case "int32":
-								case "int":
-									dr[i] = Convert.ToInt32(value);
-									break;
-								case "uint32":
-								case "uint":
-									dr[i] = Convert.ToUInt32(value);
-									break;
-								case "int64":
-								case "long":
-									dr[i] = Convert.ToInt64(value);
-									break;
-								case "uint64":
-								case "ulong":
-									dr[i] = Convert.ToUInt64(value);
-									break;
-								case "single":
-								case "float":
-									dr[i] = Convert.ToSingle(value);
-									break;
-								case "boolean":
-								case "bool":
-									dr[i] = Convert.ToBoolean(value);
-									break;
-								case "string":
-									dr[i] = value;
-									break;
-								case "int16":
-								case "short":
-									dr[i] = Convert.ToInt16(value);
-									break;
-								case "uint16":
-								case "ushort":
-									dr[i] = Convert.ToUInt16(value);
-									break;
-							}
+							for(int i = 0; i < Data.Columns.Count; ++i)
+                            {
+								var value = headerrow ? recordDict[Data.Columns[i].ColumnName] : recordDict[$"Field{i+1}"];
 
-							//Double check our Ids
-							if (i == idcolumn)
-							{
-								int id = (int)dr[i];
-
-								if (flags.HasFlag(ImportFlags.TakeNewest) && usedids.Contains(id))
+								switch (Data.Columns[i].DataType.Name.ToLower())
 								{
-									var prev = importTable.Rows.Find(id);
-									if (prev != null)
-										importTable.Rows.Remove(prev);
-								}
-								else if (flags.HasFlag(ImportFlags.FixIds) && usedids.Contains(id))
-								{
-									dr[i] = ++maxid;
-									id = (int)dr[i];
+									case "sbyte":
+										dr[i] = Convert.ToSByte(value);
+										break;
+									case "byte":
+										dr[i] = Convert.ToByte(value);
+										break;
+									case "int32":
+									case "int":
+										dr[i] = Convert.ToInt32(value);
+										break;
+									case "uint32":
+									case "uint":
+										dr[i] = Convert.ToUInt32(value);
+										break;
+									case "int64":
+									case "long":
+										dr[i] = Convert.ToInt64(value);
+										break;
+									case "uint64":
+									case "ulong":
+										dr[i] = Convert.ToUInt64(value);
+										break;
+									case "single":
+									case "float":
+										dr[i] = Convert.ToSingle(value);
+										break;
+									case "boolean":
+									case "bool":
+										dr[i] = Convert.ToBoolean(value);
+										break;
+									case "string":
+										dr[i] = value;
+										break;
+									case "int16":
+									case "short":
+										dr[i] = Convert.ToInt16(value);
+										break;
+									case "uint16":
+									case "ushort":
+										dr[i] = Convert.ToUInt16(value);
+										break;
 								}
 
-								usedids.Add(id); //Add to list
-								maxid = Math.Max(maxid, id); //Update maxid
+								//Double check our Ids
+								if (i == idcolumn)
+								{
+									int id = (int)dr[i];
+
+									if (flags.HasFlag(ImportFlags.TakeNewest) && usedids.Contains(id))
+									{
+										var prev = importTable.Rows.Find(id);
+										if (prev != null)
+											importTable.Rows.Remove(prev);
+									}
+									else if (flags.HasFlag(ImportFlags.FixIds) && usedids.Contains(id))
+									{
+										dr[i] = ++maxid;
+										id = (int)dr[i];
+									}
+
+									usedids.Add(id); //Add to list
+									maxid = Math.Max(maxid, id); //Update maxid
+								}
 							}
+
+							importTable.Rows.Add(dr);
 						}
-
-						importTable.Rows.Add(dr);
 					}
 				}
 			}
