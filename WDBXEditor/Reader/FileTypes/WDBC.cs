@@ -19,7 +19,7 @@ namespace WDBXEditor.Reader.FileTypes
             { "uint", 4 },
             { "string", 4 }, // string is actually a uint32 offset in the string table
             { "float", 4 },
-            { "ulong", 4 }
+            { "ulong", 8 }
         };
 
         public WDBC(Table definition)
